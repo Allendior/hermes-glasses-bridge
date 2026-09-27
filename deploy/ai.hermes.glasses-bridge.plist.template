@@ -7,10 +7,10 @@
   <key>ProgramArguments</key>
   <array>
     <string>/bin/sh</string>
-    <string>/Users/allenghanghas/.local/share/hermes-glasses-bridge/scripts/run_bridge.sh</string>
+    <string>__RUNTIME_DIR__/scripts/run_bridge.sh</string>
   </array>
   <key>WorkingDirectory</key>
-  <string>/Users/allenghanghas/.local/share/hermes-glasses-bridge</string>
+  <string>__RUNTIME_DIR__</string>
   <key>RunAtLoad</key>
   <true/>
   <key>KeepAlive</key>
@@ -18,9 +18,9 @@
   <key>ThrottleInterval</key>
   <integer>10</integer>
   <key>StandardOutPath</key>
-  <string>/Users/allenghanghas/.local/share/hermes-glasses-bridge/work/logs/bridge.log</string>
+  <string>__RUNTIME_DIR__/work/logs/bridge.log</string>
   <key>StandardErrorPath</key>
-  <string>/Users/allenghanghas/.local/share/hermes-glasses-bridge/work/logs/bridge.error.log</string>
+  <string>__RUNTIME_DIR__/work/logs/bridge.error.log</string>
   <key>EnvironmentVariables</key>
   <dict>
     <key>PYTHONUNBUFFERED</key>

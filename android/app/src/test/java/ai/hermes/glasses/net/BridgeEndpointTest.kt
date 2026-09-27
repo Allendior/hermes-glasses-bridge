@@ -8,8 +8,8 @@ class BridgeEndpointTest {
     @Test
     fun acceptsTailnetHttpAddress() {
         assertEquals(
-            "http://100.106.184.56:8788",
-            BridgeEndpoint.normalize("http://100.106.184.56:8788/"),
+            "http://100.64.1.5:8788",
+            BridgeEndpoint.normalize("http://100.64.1.5:8788/"),
         )
     }
 

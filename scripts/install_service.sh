@@ -3,7 +3,7 @@ set -eu
 
 project_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 label=ai.hermes.glasses-bridge
-source_plist="$project_dir/deploy/$label.plist"
+plist_template="$project_dir/deploy/$label.plist.template"
 target_plist="$HOME/Library/LaunchAgents/$label.plist"
 runtime_dir="$HOME/.local/share/hermes-glasses-bridge"
 
@@ -39,7 +39,8 @@ else
   /usr/bin/python3 "$runtime_dir/scripts/configure_target.py"
 fi
 
-install -m 600 "$source_plist" "$target_plist"
+sed "s|__RUNTIME_DIR__|$runtime_dir|g" "$plist_template" > "$target_plist"
+chmod 600 "$target_plist"
 launchctl bootout "gui/$(id -u)/$label" 2>/dev/null || true
 launchctl bootstrap "gui/$(id -u)" "$target_plist"
 launchctl kickstart -k "gui/$(id -u)/$label"

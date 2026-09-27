@@ -34,10 +34,13 @@ The debug APK is generated at
 2. Install the Meta AI app, pair the glasses, and enable Developer Mode for the
    glasses.
 3. Install the debug APK with `./gradlew installDebug` or Android Studio.
-4. In Hermes Glasses, leave the bridge URL as
-   `http://100.106.184.56:8788` and enter the bridge API key from the Mac's
-   `~/.hermes/.env`. The app encrypts this key with Android Keystore and does not
-   include it in the APK or repository.
+4. In Hermes Glasses, set the bridge URL to your own Mac's Tailscale address
+   and the port from its `.env` (`BRIDGE_PORT`, default `8788`), e.g.
+   `http://100.x.y.z:8788`. Find your Mac's address by running
+   `tailscale ip -4` on it. Enter the bridge API key from the Mac's `.env`
+   (`BRIDGE_API_KEY`). The app encrypts this key with Android Keystore and does
+   not include it in the APK or repository. There is no built-in default URL,
+   so this field must be filled in on first run.
 5. Tap **Test Mac bridge**, then **Connect Meta glasses**. Complete the Meta AI
    registration and microphone grant.
 6. Tap **Start glasses listening**, speak, and wait for the cloned reply.

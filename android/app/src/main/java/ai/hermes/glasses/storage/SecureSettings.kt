@@ -70,7 +70,11 @@ class SecureSettings(context: Context) {
     }
 
     companion object {
-        const val DEFAULT_URL = "http://100.106.184.56:8788"
+        // No default: each owner must enter their own Mac's Tailscale IPv4
+        // address (find it with `tailscale ip -4` on the Mac). Shipping a
+        // real address here would point every install at the maintainer's
+        // machine.
+        const val DEFAULT_URL = ""
         private const val URL_KEY = "bridge_url"
         private const val LANGUAGE_KEY = "language"
         private const val SESSION_KEY = "session_id"
