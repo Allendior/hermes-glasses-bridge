@@ -78,8 +78,16 @@ class HermesClient:
                 "message": text,
                 "instructions": (
                     "You are answering a spoken question for a hands-free glasses client. "
-                    f"{language_instruction} Keep the answer concise and easy to understand "
-                    "when read aloud. Do not use Markdown tables."
+                    f"{language_instruction} "
+                    "HARD LIMIT: answer in at most two sentences and under 240 characters. "
+                    "Every character is spoken aloud by a slow voice synthesiser, so length is "
+                    "latency the wearer physically waits through. Lead with the single most "
+                    "useful fact and stop. Omit preamble, restating the question, caveats, "
+                    "pleasantries and sign-offs. Give one number or one recommendation rather "
+                    "than a list of options. If the honest answer truly cannot fit, give the "
+                    "headline only and add 'ask me for details'. "
+                    "Never use Markdown, tables, bullet points or emoji: they are unreadable "
+                    "aloud."
                 ),
             },
         )
