@@ -1,22 +1,61 @@
 # Hermes Glasses Bridge
 
-This companion service connects a phone client to an existing Hermes Agent on
-the Mac mini. It keeps the Meta glasses SDK out of the agent process and gives
-the mobile clients one stable protocol for:
+Talk to your own [Hermes Agent](https://github.com/NousResearch/hermes-agent)
+through Meta Ray-Ban glasses: ask on the glasses, get a spoken answer back in
+your own cloned voice, over your private Tailscale network — nothing routes
+through Meta's or anyone else's cloud beyond what the glasses themselves
+already require.
+
+This is an unofficial, community project. It is not affiliated with or
+endorsed by Meta or Nous Research.
+
+This companion service connects a phone client to a Hermes Agent running on
+your own Mac. It keeps the Meta glasses SDK out of the agent process and gives
+mobile clients one stable protocol for:
 
 - persistent Hermes conversations;
 - English, Hindi, and French replies;
 - local speech-to-text and text-to-speech providers;
 - Tailscale-only access when bound to the Mac's Tailscale address.
 
-The first milestone keeps the macOS system voices as a transport fallback. The
-target Mac also has MLX-Audio Chatterbox Multilingual v3 installed for local,
-zero-shot voice cloning in English, Hindi, and French.
+Everything stays on your own machines: the bridge only accepts requests over
+your tailnet (or loopback), and it never proxies to a third-party TTS/STT
+cloud unless you configure one yourself.
+
+macOS system voices work out of the box as a transport fallback. The bridge
+also supports MLX-Audio Chatterbox Multilingual v3 for local, zero-shot voice
+cloning in English, Hindi, and French — run entirely on your Mac, no cloud
+voice service involved.
 
 The Android companion app is in [`android/`](android/README.md). It uses Meta's
 Device Access Toolkit for speech recognition on the glasses, sends final
 transcripts to this bridge over Tailscale, and plays authenticated cloned-voice
 replies through the phone's active Bluetooth audio route.
+
+## What you need
+
+- **Meta Ray-Ban (or similar Meta AI) glasses**, paired to an Android phone
+  with the Meta AI app, Developer Mode enabled on the glasses, and Meta's
+  Speech API accepted for your account (Meta currently marks it experimental
+  and may gate access — check the Meta AI app / Meta for Developers).
+- **A Meta developer app**: register one at
+  [developers.meta.com](https://developers.meta.com/) to get your own
+  `mwdat_application_id` and `mwdat_client_token` for Device Access Toolkit.
+  Meta ships a documented `0`/test credential pair for local development; you
+  need your own for anything beyond that.
+- **A Mac** (Apple Silicon recommended for Chatterbox voice cloning) already
+  running [Hermes Agent](https://github.com/NousResearch/hermes-agent) with
+  its API server reachable on loopback.
+- **[Tailscale](https://tailscale.com/)** installed and signed into the same
+  tailnet on both the Mac and the Android phone. The bridge deliberately
+  refuses plaintext HTTP to anything outside a private/tailnet address — see
+  `BridgeEndpoint.kt` and the bridge's own host checks.
+- Python 3.11+ and [`uv`](https://github.com/astral-sh/uv) on the Mac; JDK 17
+  and Android SDK 36 to build the Android app.
+
+Nothing here needs an Apple Developer account, a Meta production app review,
+or any cloud account beyond your own Hermes/Tailscale setup — but Meta's own
+Speech API access is outside this project's control.
 
 ## Quick start
 
@@ -128,3 +167,25 @@ Run the dependency-free test suite with:
 ```sh
 python3 -m unittest discover -s tests -v
 ```
+
+## Troubleshooting
+
+- **App shows "Bridge URL needs a host" / blank on first launch**: expected —
+  there is no default bridge URL baked into the app. Enter your Mac's
+  Tailscale IPv4 address (`tailscale ip -4` on the Mac) and the port from its
+  `.env` (`BRIDGE_PORT`).
+- **"Plain HTTP is allowed only for a Tailscale or local address"**: the app
+  refuses `http://` to anything outside `100.64.0.0/10`, `127.0.0.1`,
+  `localhost`, or the Android emulator's `10.0.2.2`. Use your Tailscale IP, or
+  put a TLS-terminating proxy in front of the bridge for anything else.
+- **Bridge starts but the phone can't reach it**: confirm both devices are on
+  the same tailnet (`tailscale status` on the Mac should list the phone), and
+  that `BRIDGE_HOST` in `.env` is the Mac's Tailscale IP, not `127.0.0.1`.
+- **Meta glasses won't register / "Speech not available"**: your Meta account
+  needs Speech API access, which Meta gates and may not grant immediately.
+  Typed questions in the app work independently of glasses registration, so
+  use those to verify the rest of the pipeline first.
+- **Voice cloning sounds off / falls back to a system voice**: check
+  `TTS_PROVIDER` in `.env` and that `work/voice-reference/owner-reference.wav`
+  exists; `scripts/benchmark_voice.py` helps compare a reference clip across
+  languages before committing to it.
