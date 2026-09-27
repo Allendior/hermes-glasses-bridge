@@ -13,7 +13,7 @@ class TapToTalkStateMachineTest {
     @Test
     fun tapWhileIdleStartsListening() {
         val machine = TapToTalkStateMachine()
-        val effects = machine.on(TapToTalkEvent.TempleTap)
+        val effects = machine.on(TapToTalkEvent.TriggerPressed)
         assertEquals(TapToTalkState.LISTENING, machine.state)
         assertEquals(listOf(TapToTalkEffect.StartListening), effects)
     }
@@ -21,8 +21,8 @@ class TapToTalkStateMachineTest {
     @Test
     fun tapWhileListeningCancelsAndReturnsToIdle() {
         val machine = TapToTalkStateMachine()
-        machine.on(TapToTalkEvent.TempleTap)
-        val effects = machine.on(TapToTalkEvent.TempleTap)
+        machine.on(TapToTalkEvent.TriggerPressed)
+        val effects = machine.on(TapToTalkEvent.TriggerPressed)
         assertEquals(TapToTalkState.IDLE, machine.state)
         assertEquals(listOf(TapToTalkEffect.StopListening, TapToTalkEffect.PlayCancelCue), effects)
     }
@@ -30,9 +30,9 @@ class TapToTalkStateMachineTest {
     @Test
     fun tapWhileBusyIsIgnored() {
         val machine = TapToTalkStateMachine()
-        machine.on(TapToTalkEvent.TempleTap) // -> LISTENING
+        machine.on(TapToTalkEvent.TriggerPressed) // -> LISTENING
         machine.on(TapToTalkEvent.FinalTranscript("what time is it")) // -> BUSY
-        val effects = machine.on(TapToTalkEvent.TempleTap)
+        val effects = machine.on(TapToTalkEvent.TriggerPressed)
         assertEquals(TapToTalkState.BUSY, machine.state)
         assertEquals(emptyList<TapToTalkEffect>(), effects)
     }
@@ -40,7 +40,7 @@ class TapToTalkStateMachineTest {
     @Test
     fun finalTranscriptWhileListeningSubmitsAndGoesBusy() {
         val machine = TapToTalkStateMachine()
-        machine.on(TapToTalkEvent.TempleTap)
+        machine.on(TapToTalkEvent.TriggerPressed)
         val effects = machine.on(TapToTalkEvent.FinalTranscript("hello there"))
         assertEquals(TapToTalkState.BUSY, machine.state)
         assertEquals(
@@ -52,7 +52,7 @@ class TapToTalkStateMachineTest {
     @Test
     fun blankFinalTranscriptWhileListeningIsIgnored() {
         val machine = TapToTalkStateMachine()
-        machine.on(TapToTalkEvent.TempleTap)
+        machine.on(TapToTalkEvent.TriggerPressed)
         val effects = machine.on(TapToTalkEvent.FinalTranscript("   "))
         assertEquals(TapToTalkState.LISTENING, machine.state)
         assertEquals(emptyList<TapToTalkEffect>(), effects)
@@ -69,7 +69,7 @@ class TapToTalkStateMachineTest {
     @Test
     fun finalTranscriptWhileBusyDoesNotQueueSecondRequest() {
         val machine = TapToTalkStateMachine()
-        machine.on(TapToTalkEvent.TempleTap)
+        machine.on(TapToTalkEvent.TriggerPressed)
         machine.on(TapToTalkEvent.FinalTranscript("first question"))
         val effects = machine.on(TapToTalkEvent.FinalTranscript("second question"))
         assertEquals(TapToTalkState.BUSY, machine.state)
@@ -79,7 +79,7 @@ class TapToTalkStateMachineTest {
     @Test
     fun responseFinishedReturnsToIdleAndPlaysReadyCue() {
         val machine = TapToTalkStateMachine()
-        machine.on(TapToTalkEvent.TempleTap)
+        machine.on(TapToTalkEvent.TriggerPressed)
         machine.on(TapToTalkEvent.FinalTranscript("question"))
         val effects = machine.on(TapToTalkEvent.ResponseFinished)
         assertEquals(TapToTalkState.IDLE, machine.state)
@@ -89,7 +89,7 @@ class TapToTalkStateMachineTest {
     @Test
     fun responseFailedReturnsToIdleAndPlaysReadyCue() {
         val machine = TapToTalkStateMachine()
-        machine.on(TapToTalkEvent.TempleTap)
+        machine.on(TapToTalkEvent.TriggerPressed)
         machine.on(TapToTalkEvent.FinalTranscript("question"))
         val effects = machine.on(TapToTalkEvent.ResponseFailed)
         assertEquals(TapToTalkState.IDLE, machine.state)
@@ -99,7 +99,7 @@ class TapToTalkStateMachineTest {
     @Test
     fun disconnectedWhileListeningStopsListeningAndReturnsToIdle() {
         val machine = TapToTalkStateMachine()
-        machine.on(TapToTalkEvent.TempleTap)
+        machine.on(TapToTalkEvent.TriggerPressed)
         val effects = machine.on(TapToTalkEvent.Disconnected)
         assertEquals(TapToTalkState.IDLE, machine.state)
         assertEquals(listOf(TapToTalkEffect.StopListening), effects)
@@ -108,7 +108,7 @@ class TapToTalkStateMachineTest {
     @Test
     fun disconnectedWhileBusyReturnsToIdleWithoutStoppingListening() {
         val machine = TapToTalkStateMachine()
-        machine.on(TapToTalkEvent.TempleTap)
+        machine.on(TapToTalkEvent.TriggerPressed)
         machine.on(TapToTalkEvent.FinalTranscript("question"))
         val effects = machine.on(TapToTalkEvent.Disconnected)
         assertEquals(TapToTalkState.IDLE, machine.state)
@@ -134,7 +134,7 @@ class TapToTalkStateMachineTest {
     @Test
     fun manualSubmitWhileListeningStopsListeningThenSubmits() {
         val machine = TapToTalkStateMachine()
-        machine.on(TapToTalkEvent.TempleTap)
+        machine.on(TapToTalkEvent.TriggerPressed)
         val effects = machine.on(TapToTalkEvent.ManualSubmit("typed question"))
         assertEquals(TapToTalkState.BUSY, machine.state)
         assertEquals(

@@ -40,6 +40,7 @@ import com.meta.wearable.dat.core.types.RegistrationState
 import com.meta.wearable.dat.inputs.Inputs
 import com.meta.wearable.dat.inputs.addInputs
 import com.meta.wearable.dat.inputs.removeInputs
+import com.meta.wearable.dat.inputs.types.ButtonType
 import com.meta.wearable.dat.inputs.types.InputEvent
 import com.meta.wearable.dat.inputs.types.InputSource
 import com.meta.wearable.dat.inputs.types.InputsConfiguration
@@ -238,16 +239,23 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * Only CAPTOUCH (temple tap) is requested. We deliberately do NOT subscribe to
-     * CAPTURE_BUTTON or ACTION_BUTTON: we have not physically verified whether a capture-button
-     * press also writes a photo to the wearer's camera roll on this glasses model, and until
-     * that is confirmed we should not risk triggering a hidden capture as a side effect of the
-     * voice-assistant flow. consumeBack = true is required — without it a back gesture on
-     * CAPTOUCH tears down the whole DeviceSession instead of just delivering InputEvent.Back.
+     * Only ACTION_BUTTON is requested: Allen wants the physical action button as the hands-free
+     * trigger, not a temple swipe. Per the DAT 1.0 ButtonType docs the action button surfaces as
+     * InputEvent.Button(ButtonType.ACTION); captouch nav/select arrive as Nav/Select and
+     * capture-button presses as Capture, so subscribing to this one source keeps the other
+     * surfaces out of the voice flow entirely.
+     *
+     * We deliberately do NOT subscribe to CAPTURE_BUTTON: it is not physically verified whether a
+     * capture press also writes a photo to the wearer's camera roll on this model, and we will not
+     * risk a hidden capture as a side effect of talking to Hermes.
+     *
+     * consumeBack = true is kept even though CAPTOUCH is not subscribed. It is cheap insurance:
+     * an unconsumed back gesture tears down the entire DeviceSession, and the phone then sees only
+     * a session that ended for no nameable reason.
      */
     private fun attachInputs(session: DeviceSession) {
         if (inputs != null) return
-        session.addInputs(InputsConfiguration(sources = setOf(InputSource.CAPTOUCH), consumeBack = true)).fold(
+        session.addInputs(InputsConfiguration(sources = setOf(InputSource.ACTION_BUTTON), consumeBack = true)).fold(
             onSuccess = { attached ->
                 inputs = attached
                 var reachedActive = false
@@ -260,7 +268,7 @@ class MainActivity : ComponentActivity() {
                             // actually reached ACTIVE, otherwise we'd tear down a capability
                             // still coming up.
                             InputsState.INACTIVE -> if (reachedActive) {
-                                showStatus("Temple tap is no longer active")
+                                showStatus("Action button is no longer active")
                             }
                             else -> Unit
                         }
@@ -273,11 +281,24 @@ class MainActivity : ComponentActivity() {
                 }
                 speechJobs += lifecycleScope.launch {
                     attached.events.collect { event ->
-                        if (event is InputEvent.Back) dispatch(TapToTalkEvent.TempleTap)
+                        // The action button surfaces as InputEvent.Button with
+                        // ButtonType.ACTION (per the DAT 1.0 ButtonType docs: captouch nav/select
+                        // arrive as Nav/Select, and capture-button presses as Capture, NOT as
+                        // Button). We accept Select from ACTION_BUTTON too, because some firmware
+                        // maps a confirm press onto the semantic select event instead.
+                        when {
+                            event is InputEvent.Button &&
+                                event.button == ButtonType.ACTION -> dispatch(TapToTalkEvent.TriggerPressed)
+
+                            event is InputEvent.Select &&
+                                event.source == InputSource.ACTION_BUTTON -> dispatch(TapToTalkEvent.TriggerPressed)
+
+                            else -> showStatus("Glasses input ignored: $event")
+                        }
                     }
                 }
             },
-            onFailure = { error, _ -> showStatus("Temple tap is unavailable: ${error.description}") },
+            onFailure = { error, _ -> showStatus("Action button is unavailable: ${error.description}") },
         )
     }
 
@@ -456,7 +477,7 @@ class MainActivity : ComponentActivity() {
     private fun wireActions() {
         registrationButton.setOnClickListener { connectGlasses() }
         listenButton.setOnClickListener {
-            if (speech == null) connectGlasses() else dispatch(TapToTalkEvent.TempleTap)
+            if (speech == null) connectGlasses() else dispatch(TapToTalkEvent.TriggerPressed)
         }
         sendButton.setOnClickListener { dispatch(TapToTalkEvent.ManualSubmit(prompt.text.toString())) }
         updateAppButton.setOnClickListener { Wearables.openDATGlassesAppUpdate(this) }

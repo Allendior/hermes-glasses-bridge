@@ -1,6 +1,6 @@
 package ai.hermes.glasses.interaction
 
-/** Idle/listening/busy states for the glasses temple-tap hands-free trigger. No Android or DAT types. */
+/** Idle/listening/busy states for the glasses action-button hands-free trigger. No Android or DAT types. */
 enum class TapToTalkState {
     IDLE,
     LISTENING,
@@ -8,8 +8,8 @@ enum class TapToTalkState {
 }
 
 sealed class TapToTalkEvent {
-    /** A temple tap on CAPTOUCH, delivered to the app as InputEvent.Back. */
-    object TempleTap : TapToTalkEvent()
+    /** A press of the physical action button, delivered as InputEvent.Button(ButtonType.ACTION). */
+    object TriggerPressed : TapToTalkEvent()
 
     data class FinalTranscript(val text: String) : TapToTalkEvent()
 
@@ -52,7 +52,7 @@ class TapToTalkStateMachine {
         current: TapToTalkState,
         event: TapToTalkEvent,
     ): Pair<TapToTalkState, List<TapToTalkEffect>> = when (event) {
-        is TapToTalkEvent.TempleTap -> when (current) {
+        is TapToTalkEvent.TriggerPressed -> when (current) {
             TapToTalkState.IDLE ->
                 TapToTalkState.LISTENING to listOf(TapToTalkEffect.StartListening)
             TapToTalkState.LISTENING ->
