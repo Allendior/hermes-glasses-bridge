@@ -1,0 +1,13 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+# Generated audio, model weights, private voice references, and benchmark data.
+work/
+
+# Android/Gradle machine-local and generated files.
+.gradle/
+android/.gradle/
+android/local.properties
+android/**/build/
+android/.android-home/

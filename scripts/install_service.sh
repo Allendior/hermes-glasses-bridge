@@ -1,0 +1,46 @@
+#!/bin/sh
+set -eu
+
+project_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+label=ai.hermes.glasses-bridge
+source_plist="$project_dir/deploy/$label.plist"
+target_plist="$HOME/Library/LaunchAgents/$label.plist"
+runtime_dir="$HOME/.local/share/hermes-glasses-bridge"
+
+mkdir -p "$runtime_dir/scripts" "$runtime_dir/work/logs" "$HOME/Library/LaunchAgents"
+
+# LaunchAgents cannot traverse macOS-protected Documents folders reliably. Keep
+# the editable source here, but run a small deployed copy from Application Data.
+/usr/bin/ditto "$project_dir/hermes_voice_bridge" "$runtime_dir/hermes_voice_bridge"
+for script in run_bridge.sh chatterbox_tts.py configure_target.py; do
+  install -m 755 "$project_dir/scripts/$script" "$runtime_dir/scripts/$script"
+done
+
+if [ ! -d "$runtime_dir/.venv" ]; then
+  cp -cR "$project_dir/.venv" "$runtime_dir/.venv"
+fi
+if [ ! -d "$runtime_dir/work/voice-models" ]; then
+  mkdir -p "$runtime_dir/work"
+  cp -cR "$project_dir/work/voice-models" "$runtime_dir/work/voice-models"
+fi
+
+reference_argument=
+if [ -f "$project_dir/work/voice-reference/owner-reference.wav" ]; then
+  mkdir -p "$runtime_dir/work/voice-reference"
+  install -m 600 "$project_dir/work/voice-reference/owner-reference.wav" \
+    "$runtime_dir/work/voice-reference/owner-reference.wav"
+  reference_argument="$runtime_dir/work/voice-reference/owner-reference.wav"
+fi
+
+if [ -n "$reference_argument" ]; then
+  /usr/bin/python3 "$runtime_dir/scripts/configure_target.py" \
+    --reference-audio "$reference_argument"
+else
+  /usr/bin/python3 "$runtime_dir/scripts/configure_target.py"
+fi
+
+install -m 600 "$source_plist" "$target_plist"
+launchctl bootout "gui/$(id -u)/$label" 2>/dev/null || true
+launchctl bootstrap "gui/$(id -u)" "$target_plist"
+launchctl kickstart -k "gui/$(id -u)/$label"
+printf 'Installed and started %s from %s\n' "$label" "$runtime_dir"

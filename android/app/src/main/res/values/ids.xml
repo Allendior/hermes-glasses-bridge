@@ -1,0 +1,4 @@
+<resources>
+    <item name="test_bridge" type="id" />
+    <item name="clear_session" type="id" />
+</resources>
