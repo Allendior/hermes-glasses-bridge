@@ -4,7 +4,9 @@ import hmac
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
+import logging
 from pathlib import Path
+import threading
 from urllib.parse import parse_qs, urlparse
 
 from .config import Settings, normalize_language
@@ -12,11 +14,36 @@ from .hermes import HermesClient, HermesError
 from .speech import SpeechError, SpeechService
 
 
+LOGGER = logging.getLogger(__name__)
+
+
+def public_upstream_error(error: Exception) -> str:
+    """Return a stable client message without leaking provider or local details."""
+    LOGGER.warning("upstream request failed: %s", type(error).__name__)
+    return "upstream service unavailable"
+
+
+def validated_text(value: object, max_chars: int) -> str:
+    text = str(value or "").strip()
+    if not text:
+        raise ValueError("text is required")
+    if len(text) > max_chars:
+        raise ValueError(f"text is too long (maximum {max_chars} characters)")
+    return text
+
+
 class BridgeApplication:
     def __init__(self, settings: Settings, audio_dir: Path):
         self.settings = settings
         self.hermes = HermesClient(settings.hermes_base_url, settings.hermes_api_key)
         self.speech = SpeechService(settings, audio_dir)
+        self._work_slots = threading.BoundedSemaphore(settings.max_concurrent_requests)
+
+    def try_acquire_work(self) -> bool:
+        return self._work_slots.acquire(blocking=False)
+
+    def release_work(self) -> None:
+        self._work_slots.release()
 
 
 class BridgeHandler(BaseHTTPRequestHandler):
@@ -97,13 +124,25 @@ class BridgeHandler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         if not self._require_auth():
             return
+        if not self.app.try_acquire_work():
+            self._json(
+                HTTPStatus.SERVICE_UNAVAILABLE,
+                {"error": "bridge is busy, try again shortly"},
+            )
+            return
+        try:
+            self._handle_post()
+        finally:
+            self.app.release_work()
+
+    def _handle_post(self) -> None:
         parsed = urlparse(self.path)
         try:
             if parsed.path == "/v1/turn":
                 payload = self._read_json()
-                text = str(payload.get("text") or "").strip()
-                if not text:
-                    raise ValueError("text is required")
+                text = validated_text(
+                    payload.get("text"), self.app.settings.max_text_chars
+                )
                 language = normalize_language(payload.get("language"))
                 session_value = payload.get("session_id")
                 session_id = str(session_value).strip() if session_value else None
@@ -121,9 +160,9 @@ class BridgeHandler(BaseHTTPRequestHandler):
                 return
             if parsed.path == "/v1/synthesize":
                 payload = self._read_json()
-                text = str(payload.get("text") or "").strip()
-                if not text:
-                    raise ValueError("text is required")
+                text = validated_text(
+                    payload.get("text"), self.app.settings.max_text_chars
+                )
                 language = normalize_language(payload.get("language"))
                 audio_id, _, media_type = self.app.speech.synthesize(text, language)
                 self._json(
@@ -136,23 +175,33 @@ class BridgeHandler(BaseHTTPRequestHandler):
                 )
                 return
             if parsed.path == "/v1/transcribe":
-                language = normalize_language(parse_qs(parsed.query).get("language", ["en"])[0])
+                language = normalize_language(
+                    parse_qs(parsed.query).get("language", ["en"])[0]
+                )
                 length = int(self.headers.get("Content-Length", "0"))
                 if length <= 0 or length > 25_000_000:
                     raise ValueError("audio body must be between 1 byte and 25 MB")
                 audio = self.rfile.read(length)
                 transcript = self.app.speech.transcribe(
-                    audio, language, self.headers.get("Content-Type", "application/octet-stream")
+                    audio,
+                    language,
+                    self.headers.get("Content-Type", "application/octet-stream"),
                 )
-                self._json(HTTPStatus.OK, {"language": language, "text": transcript})
+                self._json(
+                    HTTPStatus.OK,
+                    {"language": language, "text": transcript},
+                )
                 return
             self._json(HTTPStatus.NOT_FOUND, {"error": "not found"})
+        except json.JSONDecodeError:
+            self._json(HTTPStatus.BAD_REQUEST, {"error": "invalid JSON"})
         except ValueError as exc:
             self._json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
         except (HermesError, SpeechError) as exc:
-            self._json(HTTPStatus.BAD_GATEWAY, {"error": str(exc)})
-        except json.JSONDecodeError:
-            self._json(HTTPStatus.BAD_REQUEST, {"error": "invalid JSON"})
+            self._json(
+                HTTPStatus.BAD_GATEWAY,
+                {"error": public_upstream_error(exc)},
+            )
 
 
 def make_server(settings: Settings, audio_dir: Path) -> ThreadingHTTPServer:

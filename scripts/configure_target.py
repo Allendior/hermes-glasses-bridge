@@ -13,7 +13,6 @@ import subprocess
 
 
 ROOT = Path(__file__).resolve().parent.parent
-HERMES_ENV = Path.home() / ".hermes" / ".env"
 
 
 def dotenv(path: Path) -> dict[str, str]:
@@ -57,8 +56,11 @@ def main() -> int:
     if not 1 <= args.bridge_port <= 65535:
         raise SystemExit("bridge port must be between 1 and 65535")
 
-    hermes_values = dotenv(HERMES_ENV)
-    hermes_key = safe(hermes_values.get("API_SERVER_KEY", ""), "Hermes API key")
+    hermes_key = safe(
+        os.environ.get("API_SERVER_KEY")
+        or os.environ.get("HERMES_API_KEY", ""),
+        "Hermes API key from API_SERVER_KEY or HERMES_API_KEY",
+    )
     current = dotenv(ROOT / ".env")
     bridge_key = current.get("BRIDGE_API_KEY") or secrets.token_hex(32)
 
@@ -91,9 +93,12 @@ def main() -> int:
         f"TTS_REFERENCE_AUDIO={reference}",
         f"TTS_COMMAND='{command}'" if command else "TTS_COMMAND=",
         "CHATTERBOX_MODEL=mlx-community/chatterbox-multilingual-v3",
+        "CHATTERBOX_MODEL_REVISION=03565773edd72e949572557597af8063bb49a18a",
         f"HF_HOME={ROOT}/work/voice-models",
         "STT_COMMAND=",
         "AUDIO_TTL_SECONDS=3600",
+        "MAX_CONCURRENT_REQUESTS=2",
+        "MAX_TEXT_CHARS=2000",
         "",
     ]
     destination = ROOT / ".env"

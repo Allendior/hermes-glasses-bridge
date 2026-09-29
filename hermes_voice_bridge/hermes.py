@@ -17,6 +17,15 @@ class HermesError(RuntimeError):
     pass
 
 
+def limit_spoken_reply(text: str, limit: int = 240) -> str:
+    """Enforce the spoken-client limit even if the model ignores its prompt."""
+    cleaned = " ".join(text.split())
+    if len(cleaned) <= limit:
+        return cleaned
+    clipped = cleaned[: limit - 3].rsplit(" ", 1)[0].rstrip(" ,;:")
+    return f"{clipped}..."
+
+
 class HermesClient:
     def __init__(self, base_url: str, api_key: str, timeout: float = 300.0):
         self.base_url = base_url.rstrip("/")
@@ -94,4 +103,6 @@ class HermesClient:
         response_text = payload.get("message", {}).get("content")
         if not isinstance(response_text, str) or not response_text.strip():
             raise HermesError("Hermes returned an empty response")
-        return response_text, str(payload.get("session_id") or current_session)
+        return limit_spoken_reply(response_text), str(
+            payload.get("session_id") or current_session
+        )

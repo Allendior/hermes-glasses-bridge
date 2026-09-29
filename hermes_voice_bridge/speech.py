@@ -28,7 +28,9 @@ class SpeechService:
     def __init__(self, settings: Settings, audio_dir: Path):
         self.settings = settings
         self.audio_dir = audio_dir
-        self.audio_dir.mkdir(parents=True, exist_ok=True)
+        self.audio_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+        os.chmod(self.audio_dir, 0o700)
+        self.cleanup()
 
     def cleanup(self) -> None:
         cutoff = __import__("time").time() - self.settings.audio_ttl_seconds
@@ -84,6 +86,7 @@ class SpeechService:
             raise SpeechError(completed.stderr.strip() or "TTS command failed")
         if not output.is_file() or output.stat().st_size == 0:
             raise SpeechError("TTS command did not create audio")
+        os.chmod(output, 0o600)
         return audio_id, output, media_type
 
     def transcribe(self, audio: bytes, language: str, content_type: str) -> str:

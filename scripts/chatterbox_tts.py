@@ -11,6 +11,7 @@ import sys
 
 SUPPORTED_LANGUAGES = frozenset({"en", "hi", "fr"})
 DEFAULT_MODEL = "mlx-community/chatterbox-multilingual-v3"
+DEFAULT_MODEL_REVISION = "03565773edd72e949572557597af8063bb49a18a"
 
 
 def parse_args() -> argparse.Namespace:
@@ -20,6 +21,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--language", required=True, choices=sorted(SUPPORTED_LANGUAGES))
     parser.add_argument("--reference", required=True)
     parser.add_argument("--model", default=os.environ.get("CHATTERBOX_MODEL", DEFAULT_MODEL))
+    parser.add_argument(
+        "--model-revision",
+        default=os.environ.get("CHATTERBOX_MODEL_REVISION", DEFAULT_MODEL_REVISION),
+    )
     return parser.parse_args()
 
 
@@ -38,12 +43,17 @@ def main() -> int:
         raise SystemExit("text file is empty")
 
     # Import only after argument validation so configuration failures remain fast.
+    from huggingface_hub import snapshot_download
     import mlx.core as mx
     import numpy as np
     from mlx_audio.audio_io import write as audio_write
     from mlx_audio.tts.utils import load_model
 
-    model = load_model(args.model)
+    model_path = snapshot_download(
+        repo_id=args.model,
+        revision=args.model_revision,
+    )
+    model = load_model(model_path)
     chunks = []
     sample_rate = model.sample_rate
     for result in model.generate(

@@ -37,22 +37,31 @@ if [ -n "$lan_ip" ]; then
   printf 'Bridge LAN isolation: OK (%s:%s refused)\n' "$lan_ip" "$BRIDGE_PORT"
 fi
 
+if [ -z "${BRIDGE_API_KEY:-}" ]; then
+  printf 'FAIL BRIDGE_API_KEY is missing from %s\n' "$env_file" >&2
+  exit 1
+fi
+
+# Keep the key in the Authorization header only. Do not print it.
+auth_header="Authorization: Bearer ${BRIDGE_API_KEY}"
+set +x
+
 first_body=$(jq -nc '{text:"What is the capital of France? Answer in one short sentence.",language:"en",speak:true}')
 curl --fail-with-body --silent --show-error --max-time 300 \
-  -H "Authorization: Bearer $BRIDGE_API_KEY" \
+  -H "$auth_header" \
   -H 'Content-Type: application/json' \
   --data "$first_body" "$base_url/v1/turn" > "$output_dir/turn-en.json"
 
 session_id=$(jq -er '.session_id' "$output_dir/turn-en.json")
 audio_url=$(jq -er '.audio_url' "$output_dir/turn-en.json")
 curl --fail --silent --show-error --max-time 30 \
-  -H "Authorization: Bearer $BRIDGE_API_KEY" \
+  -H "$auth_header" \
   "$base_url$audio_url" > "$output_dir/turn-en.audio"
 
 second_body=$(jq -nc --arg session_id "$session_id" \
   '{text:"Now answer the same question in French.",language:"fr",speak:false,session_id:$session_id}')
 curl --fail-with-body --silent --show-error --max-time 300 \
-  -H "Authorization: Bearer $BRIDGE_API_KEY" \
+  -H "$auth_header" \
   -H 'Content-Type: application/json' \
   --data "$second_body" "$base_url/v1/turn" > "$output_dir/turn-fr.json"
 

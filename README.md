@@ -3,9 +3,10 @@
 Connect your Ray-Ban Meta glasses to your own Hermes AI agent instead of
 Meta's built in assistant. Ask it something out loud on the glasses, it
 thinks with your own Hermes agent, and answers back in your own cloned voice.
-Everything runs over your private Tailscale network, so it's just your
-glasses talking to your own Mac. Nothing routes through Meta's or anyone
-else's cloud beyond what the glasses themselves already require.
+Everything between the phone and bridge runs over your private Tailscale
+network. The bridge stays on your Mac. Meta still handles the glasses and
+speech features it provides, and Hermes uses whatever model provider you
+configure.
 
 This is not an official Meta or Nous Research project, I'm not affiliated
 with either. I built this because I wanted my glasses to talk to my own
@@ -20,9 +21,11 @@ process and gives mobile clients one stable protocol for:
 - local speech-to-text and text-to-speech providers;
 - Tailscale-only access when bound to the Mac's Tailscale address.
 
-Everything stays on your own machines: the bridge only accepts requests over
-your tailnet (or loopback), and it never proxies to a third-party TTS/STT
-cloud unless you configure one yourself.
+The bridge service itself stays on your own machines. It accepts requests only
+on loopback or a Tailscale address. Local STT and TTS stay local when you use
+the included macOS or Chatterbox path. Your Hermes model traffic follows the
+provider you selected in Hermes, and Meta's glasses SDK follows Meta's own data
+handling.
 
 macOS system voices work out of the box as a fallback. If you want your own
 cloned voice answering back instead of a generic robot voice, the bridge also
@@ -57,19 +60,40 @@ replies through the phone's active Bluetooth audio route.
 - Python 3.11+ and [`uv`](https://github.com/astral-sh/uv) on the Mac; JDK 17
   and Android SDK 36 to build the Android app.
 
-You don't need an Apple Developer account, a Meta production app review, or
-any cloud account beyond your own Hermes and Tailscale setup. Meta's own
-Speech API access is the one thing outside this project's control.
+You don't need an Apple Developer account or a Meta production app review.
+Meta's Speech API access is the one thing outside this project's control.
+Hermes may still use a cloud model provider if that is how your Hermes install
+is configured.
+
+## Data flow and privacy
+
+- **Glasses and Meta AI app:** Meta's SDK captures the glasses interaction and
+  provides the final transcript. Meta's terms and privacy policy apply here.
+- **Android to Mac:** the companion app sends that transcript to the bridge
+  over your tailnet with a bearer key stored by Android Keystore.
+- **Bridge to Hermes:** the bridge calls the loopback-only Hermes API. Hermes
+  then uses your selected model provider, which may be local or cloud-hosted.
+- **Reply audio:** macOS voices and Chatterbox run locally. Chatterbox downloads
+  its model files from Hugging Face the first time unless you pre-stage them.
+- **Temporary files:** generated audio is mode `0600`, stored in a mode `0700`
+  directory, and removed after its configured TTL. Voice references and keys
+  stay outside Git.
+
+This project does not turn a cloud-configured Hermes setup into a local-only
+system. Check your Hermes model, Meta, and optional model-download choices if
+you need a fully local path.
 
 ## Quick start
 
-1. Run `./scripts/configure_target.py` to generate a mode-0600 `.env` with a
-   random bridge key, the active Tailscale IPv4 address, and Hermes's existing
-   API key.
-2. Enable Hermes's API server on loopback port 8642 using the same
-   `HERMES_API_KEY`.
-3. Start Hermes with `hermes gateway`.
-4. Run the bridge:
+1. Export the same API key that you configured for Hermes as
+   `API_SERVER_KEY` or `HERMES_API_KEY`. Load it from your password manager or
+   secure shell environment. Do not put it in a command you plan to share.
+2. Run `./scripts/configure_target.py` to generate a mode-0600 `.env` with a
+   random bridge key and the active Tailscale IPv4 address. The script uses the
+   already-exported key and does not read Hermes's private `.env` file.
+3. Enable Hermes's API server on loopback port 8642 using that same key.
+4. Start Hermes with `hermes gateway`.
+5. Run the bridge:
 
    ```sh
    set -a
@@ -78,7 +102,7 @@ Speech API access is the one thing outside this project's control.
    ./scripts/run_bridge.sh
    ```
 
-5. Check `http://127.0.0.1:8787/health`.
+6. Check `http://127.0.0.1:8787/health`.
 
 For remote access, set `BRIDGE_HOST` to the Mac's Tailscale IP. Keep Hermes on
 `127.0.0.1`; only the bridge needs to be reachable from the phone. This target
@@ -91,9 +115,15 @@ background launch agents. Install a small runtime copy and persistent service
 under `~/.local/share` with:
 
 ```sh
+./scripts/install_service.sh --dry-run
 ./scripts/install_service.sh
 ./scripts/e2e_target_test.sh
 ```
+
+The preview does not write files or start a service. To stop and remove the
+LaunchAgent later, run `./scripts/remove_service.sh`. It deliberately leaves
+the runtime directory in place so uninstalling cannot silently destroy keys or
+voice recordings.
 
 The install script preserves the bridge API key across reinstalls. It also
 copies a prepared `work/voice-reference/owner-reference.wav`, if present, and
@@ -102,13 +132,10 @@ Chatterbox.
 
 ## Voice-cloning setup
 
-Install the MLX runtime in the isolated project environment:
+Install the pinned MLX runtime in the isolated project environment:
 
 ```sh
-UV_CACHE_DIR=/private/tmp/hermes-glasses-uv-cache \
-  uv venv --python ~/.hermes/hermes-agent/venv/bin/python .venv
-UV_CACHE_DIR=/private/tmp/hermes-glasses-uv-cache \
-  uv pip install --python .venv/bin/python 'mlx-audio>=0.4.7,<0.5'
+UV_CACHE_DIR="$TMPDIR/hermes-glasses-uv-cache" uv sync --extra voice --locked
 ```
 
 Record the owner, benchmark all target languages, then reinstall the service:

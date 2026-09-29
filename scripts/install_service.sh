@@ -7,6 +7,21 @@ plist_template="$project_dir/deploy/$label.plist.template"
 target_plist="$HOME/Library/LaunchAgents/$label.plist"
 runtime_dir="$HOME/.local/share/hermes-glasses-bridge"
 
+case "${1:-}" in
+  --dry-run)
+    printf 'Would install runtime files into %s\n' "$runtime_dir"
+    printf 'Would write LaunchAgent %s\n' "$target_plist"
+    printf 'Would start user service %s\n' "$label"
+    printf 'No files changed. No service started.\n'
+    exit 0
+    ;;
+  "") ;;
+  *)
+    printf 'Usage: %s [--dry-run]\n' "$0" >&2
+    exit 2
+    ;;
+esac
+
 mkdir -p "$runtime_dir/scripts" "$runtime_dir/work/logs" "$HOME/Library/LaunchAgents"
 
 # LaunchAgents cannot traverse macOS-protected Documents folders reliably. Keep

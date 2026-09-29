@@ -32,6 +32,8 @@ class Settings:
     tts_reference_audio: str
     stt_command: str
     audio_ttl_seconds: int
+    max_concurrent_requests: int
+    max_text_chars: int
     voices: dict[str, str]
 
     @classmethod
@@ -52,6 +54,8 @@ class Settings:
             tts_reference_audio=os.environ.get("TTS_REFERENCE_AUDIO", "").strip(),
             stt_command=os.environ.get("STT_COMMAND", "").strip(),
             audio_ttl_seconds=_positive_int("AUDIO_TTL_SECONDS", 3600),
+            max_concurrent_requests=_positive_int("MAX_CONCURRENT_REQUESTS", 2),
+            max_text_chars=_positive_int("MAX_TEXT_CHARS", 2_000),
             voices={
                 "en": os.environ.get("TTS_VOICE_EN", "Samantha").strip(),
                 "hi": os.environ.get("TTS_VOICE_HI", "Lekha").strip(),
@@ -64,11 +68,18 @@ class Settings:
             raise ValueError("BRIDGE_HOST must not be empty")
         try:
             bridge_address = ipaddress.ip_address(self.bridge_host)
-        except ValueError:
-            bridge_address = None
-        if bridge_address is not None and bridge_address.is_unspecified:
+        except ValueError as exc:
             raise ValueError(
-                "BRIDGE_HOST must be loopback or a specific interface address, not a wildcard"
+                "BRIDGE_HOST must be a loopback or Tailscale IPv4 address"
+            ) from exc
+        if bridge_address.is_unspecified:
+            raise ValueError(
+                "BRIDGE_HOST must be loopback or a Tailscale address, not a wildcard"
+            )
+        tailscale_network = ipaddress.ip_network("100.64.0.0/10")
+        if not bridge_address.is_loopback and bridge_address not in tailscale_network:
+            raise ValueError(
+                "BRIDGE_HOST must be a loopback or Tailscale IPv4 address"
             )
         if len(self.bridge_api_key) < 16:
             raise ValueError("BRIDGE_API_KEY must contain at least 16 characters")
